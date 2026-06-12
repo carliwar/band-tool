@@ -154,14 +154,14 @@ export async function pullFromGist(pat: string, gistId: string): Promise<void> {
  * Inicia el sync automático bidireccional.
  * - Push: debounced 8s después de cada cambio local.
  * - Pull: cada 30s y al volver al tab, si el Gist fue actualizado remotamente.
- * Devuelve cleanup para detener el sync.
+ * Devuelve { cleanup, push } para detener el sync o forzar un push manual.
  */
 export function startAutoSync(
   pat: string,
   initialGistId: string | null,
   onGistId: (id: string) => void,
   onStatus: (status: SyncStatus) => void,
-): () => void {
+): { cleanup: () => void; push: () => void } {
   let gistId = initialGistId;
   let pushing = false;
   let pulling = false;
@@ -233,10 +233,13 @@ export function startAutoSync(
   // Verificación inicial al montar
   void checkAndPull();
 
-  return () => {
-    unsubDb();
-    clearInterval(intervalId);
-    if (pushTimer !== null) clearTimeout(pushTimer);
-    document.removeEventListener('visibilitychange', onVisibility);
+  return {
+    push: () => { void doPush(); },
+    cleanup: () => {
+      unsubDb();
+      clearInterval(intervalId);
+      if (pushTimer !== null) clearTimeout(pushTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    },
   };
 }

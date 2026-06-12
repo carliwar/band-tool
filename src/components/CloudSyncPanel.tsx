@@ -31,12 +31,12 @@ function StatusBadge({ status }: { status: SyncStatus }) {
 export function CloudSyncPanel() {
   const [gistId, setGistId] = useState<string | null>(() => localStorage.getItem(LS_GIST_ID_KEY));
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ state: 'idle' });
-  const cleanupRef = useRef<(() => void) | null>(null);
+  const syncRef = useRef<{ cleanup: () => void; push: () => void } | null>(null);
 
   useEffect(() => {
     if (!hasBuildPat) return;
-    cleanupRef.current?.();
-    cleanupRef.current = startAutoSync(
+    syncRef.current?.cleanup();
+    syncRef.current = startAutoSync(
       getEffectivePat(''),
       gistId,
       (id) => {
@@ -46,8 +46,8 @@ export function CloudSyncPanel() {
       setSyncStatus,
     );
     return () => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
+      syncRef.current?.cleanup();
+      syncRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -73,6 +73,15 @@ export function CloudSyncPanel() {
         >
           Sync
         </span>
+        <button
+          className="ghost small"
+          onClick={() => syncRef.current?.push()}
+          disabled={syncStatus.state === 'pushing' || syncStatus.state === 'pulling'}
+          aria-label="Sincronizar ahora"
+          title="Sincronizar ahora"
+        >
+          ↑↓
+        </button>
         <StatusBadge status={syncStatus} />
         {gistId && syncStatus.state === 'idle' && (
           <span className="mono dim" style={{ fontSize: 'var(--fs-small)' }}>
