@@ -31,15 +31,7 @@ function StatusBadge({ status }: { status: SyncStatus }) {
 }
 
 const LS_PAT = 'band-tool-gist-pat';
-const LS_GIST_ID = 'band-tool-gist-id';
-const LS_LAST_SYNC = 'band-tool-gist-last-sync';
 
-function formatSync(ts: string | null): string {
-  if (!ts) return 'Nunca';
-  const d = new Date(Number(ts));
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export function CloudSyncPanel() {
   const [pat, setPat] = useState(() => localStorage.getItem(LS_PAT) ?? '');
