@@ -31,7 +31,7 @@ function StatusBadge({ status }: { status: SyncStatus }) {
 export function CloudSyncPanel() {
   const [gistId, setGistId] = useState<string | null>(() => localStorage.getItem(LS_GIST_ID_KEY));
   const [syncStatus, setSyncStatus] = useState<SyncStatus>({ state: 'idle' });
-  const syncRef = useRef<{ cleanup: () => void; push: () => void } | null>(null);
+  const syncRef = useRef<{ cleanup: () => void; push: () => void; sync: () => void } | null>(null);
 
   useEffect(() => {
     if (!hasBuildPat) return;
@@ -75,7 +75,7 @@ export function CloudSyncPanel() {
         </span>
         <button
           className="ghost small"
-          onClick={() => syncRef.current?.push()}
+          onClick={() => syncRef.current?.sync()}
           disabled={syncStatus.state === 'pushing' || syncStatus.state === 'pulling'}
           aria-label="Sincronizar ahora"
           title="Sincronizar ahora"

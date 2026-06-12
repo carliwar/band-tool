@@ -161,7 +161,7 @@ export function startAutoSync(
   initialGistId: string | null,
   onGistId: (id: string) => void,
   onStatus: (status: SyncStatus) => void,
-): { cleanup: () => void; push: () => void } {
+): { cleanup: () => void; push: () => void; sync: () => void } {
   let gistId = initialGistId;
   let pushing = false;
   let pulling = false;
@@ -235,6 +235,7 @@ export function startAutoSync(
 
   return {
     push: () => { void doPush(); },
+    sync: () => { void (async () => { await checkAndPull(); await doPush(); })(); },
     cleanup: () => {
       unsubDb();
       clearInterval(intervalId);
