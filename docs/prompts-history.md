@@ -71,6 +71,22 @@ Pidió agregar "historial de prompts o algo que ayude a interpretar mejor próxi
 
 **Resultado:** Este archivo (`docs/prompts-history.md`) + `AGENTS.md` en raíz del repo. AGENTS.md = contexto, convenciones y reglas. prompts-history.md = narrativa cronológica de qué pidió y por qué se hizo cada cosa.
 
+### Prompt 7 — Página de Settings
+Pidió ocultar la sección de backup, que se despliegue bajo demanda en una nueva página llamada Settings, donde también esté el botón de "Borrar todo".
+
+**Decisión / qué se hizo:**
+- Nueva ruta `/settings` (`src/routes/Settings.tsx`) que contiene `ExportImportPanel`, `CloudSyncPanel` y un bloque "Zona peligrosa" con el botón "Borrar todo" + modal de confirmación reutilizando `Modal`.
+- Home.tsx queda limpio: ya no renderiza `ExportImportPanel`, `CloudSyncPanel` ni "Borrar todo". En su lugar, un botón `⚙ Settings` (clase `ghost small`) abajo a la derecha que navega a `/settings` con `useNavigate`.
+- Settings usa `FloatingHomeButton` para volver al inicio (mismo patrón que `Song`).
+- Ruta registrada en `App.tsx` antes del catch-all.
+
+**Archivos afectados:**
+- `src/routes/Settings.tsx` (nuevo)
+- `src/routes/Home.tsx` (limpieza + botón Settings)
+- `src/App.tsx` (nueva ruta)
+
+**Notas:** No se usó `<Link>` con clases de botón porque las clases `.primary/.ghost/.small/.danger` están scoped al selector `button` en `global.css`. Para evitar inconsistencias visuales se usa `<button onClick={() => nav('/settings')}>`.
+
 ---
 
 ## Cómo agregar entradas (para futuras sesiones / agentes)

@@ -1,17 +1,16 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { CreateSongForm } from '../components/CreateSongForm';
 import { SongList } from '../components/SongList';
-import { ExportImportPanel } from '../components/ExportImportPanel';
-import { CloudSyncPanel } from '../components/CloudSyncPanel';
-import { listSongs, deleteAllData } from '../db/repository';
+import { listSongs } from '../db/repository';
 import { useDbVersion } from '../state/store';
 
 export function Home() {
   const dbV = useDbVersion();
   const songs = listSongs();
   const [creating, setCreating] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
+  const nav = useNavigate();
   void dbV;
 
   const empty = songs.length === 0;
@@ -87,45 +86,14 @@ export function Home() {
         <SongList songs={songs} />
       )}
 
-      <ExportImportPanel />
-
-      <CloudSyncPanel />
-
-      {songs.length > 0 && (
-        <div style={{ marginTop: 'var(--sp-6)', display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="danger small" onClick={() => setConfirmDelete(true)}>
-            Borrar todo
-          </button>
-        </div>
-      )}
+      <div style={{ marginTop: 'var(--sp-6)', display: 'flex', justifyContent: 'flex-end' }}>
+        <button className="ghost small" onClick={() => nav('/settings')}>
+          ⚙ Settings
+        </button>
+      </div>
 
       <Modal isOpen={creating} onClose={() => setCreating(false)} title="Nueva canción">
         <CreateSongForm onCancel={() => setCreating(false)} />
-      </Modal>
-
-      <Modal isOpen={confirmDelete} onClose={() => setConfirmDelete(false)} title="¿Borrar todo?">
-        <p
-          className="serif"
-          style={{ fontSize: '1.125rem', marginBottom: 'var(--sp-5)', color: 'var(--bone)' }}
-        >
-          Se eliminarán todas las canciones, fases, notas, adjuntos y sesiones.
-          <br />
-          <strong style={{ color: 'var(--blood-bright)' }}>Esta acción no se puede deshacer.</strong>
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-          <button
-            className="danger"
-            onClick={() => {
-              deleteAllData();
-              setConfirmDelete(false);
-            }}
-          >
-            Sí, borrar todo
-          </button>
-          <button className="ghost" onClick={() => setConfirmDelete(false)}>
-            Cancelar
-          </button>
-        </div>
       </Modal>
     </div>
   );

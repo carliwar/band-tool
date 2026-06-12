@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Home } from './routes/Home';
 import { Song } from './routes/Song';
+import { Settings } from './routes/Settings';
 import { ThemeToggle } from './components/ThemeToggle';
 import { initDb } from './db/database';
 
@@ -53,6 +54,7 @@ export function App() {
         <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/song/:id" element={<Song />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Home />} />
         </Routes>
       </BrowserRouter>
