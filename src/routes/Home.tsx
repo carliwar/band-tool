@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Modal } from '../components/Modal';
 import { CreateSongForm } from '../components/CreateSongForm';
 import { SongList } from '../components/SongList';
+import { SyncButton } from '../components/SyncButton';
 import { listSongs } from '../db/repository';
 import { useDbVersion } from '../state/store';
 
@@ -86,7 +87,8 @@ export function Home() {
         <SongList songs={songs} />
       )}
 
-      <div style={{ marginTop: 'var(--sp-6)', display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ marginTop: 'var(--sp-6)', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 'var(--sp-3)' }}>
+        <SyncButton />
         <button className="ghost small" onClick={() => nav('/settings')}>
           ⚙ Settings
         </button>

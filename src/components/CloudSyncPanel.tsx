@@ -83,11 +83,6 @@ export function CloudSyncPanel() {
           ↑↓
         </button>
         <StatusBadge status={syncStatus} />
-        {gistId && syncStatus.state === 'idle' && (
-          <span className="mono dim" style={{ fontSize: 'var(--fs-small)' }}>
-            gist:{gistId.slice(0, 8)}…
-          </span>
-        )}
       </div>
     </section>
   );
