@@ -1,0 +1,20 @@
+.btn {
+  position: fixed;
+  right: var(--sp-4);
+  bottom: calc(var(--sp-4) + env(safe-area-inset-bottom, 0px));
+  width: 56px;
+  height: 56px;
+  background: var(--blood);
+  color: var(--bone);
+  border: 2px solid var(--bone);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 1.5rem;
+  cursor: pointer;
+  z-index: 50;
+  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+}
+.btn:hover { background: var(--blood-bright); }
+.btn:active { transform: translate(1px, 1px); box-shadow: 0 2px 0 rgba(0,0,0,0.4); }

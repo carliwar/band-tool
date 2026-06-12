@@ -1,0 +1,44 @@
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.card {
+  background: var(--ash);
+  border-left: 4px solid var(--blood);
+  padding: var(--sp-4);
+  cursor: pointer;
+  transition: transform 0.08s, background 0.12s;
+  text-align: left;
+  width: 100%;
+  border-top: none;
+  border-right: none;
+  border-bottom: none;
+  color: var(--bone);
+  font-family: var(--font-body);
+  text-transform: none;
+  letter-spacing: 0;
+  min-height: auto;
+}
+.card:hover {
+  background: var(--char);
+  transform: translateX(2px);
+  color: var(--bone);
+}
+.name {
+  font-family: var(--font-display);
+  font-size: var(--fs-display-md);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
+  margin-bottom: var(--sp-2);
+}
+.meta {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  color: var(--bone-dim);
+  display: flex;
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.meta .bpm { color: var(--gold); }

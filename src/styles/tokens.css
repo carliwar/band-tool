@@ -1,0 +1,46 @@
+:root {
+  /* Palette — Kerrang / metal moderno */
+  --ink: #0a0a0a;
+  --ash: #1c1c1c;
+  --char: #2a2a2a;
+  --bone: #efe9dd;
+  --bone-dim: #a8a298;
+  --blood: #c2261c;
+  --blood-bright: #e83a2e;
+  --gold: #b89b58;
+  --toxic: #6b8e23;
+
+  /* Typography */
+  --font-display: 'Anton', 'Bebas Neue', 'Impact', sans-serif;
+  --font-serif: 'Cormorant Garamond', 'Georgia', serif;
+  --font-body: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Space Mono', 'Menlo', 'Consolas', monospace;
+
+  /* Scale (mobile-first, scales with clamp) */
+  --fs-display-xl: clamp(2.5rem, 12vw, 6rem);
+  --fs-display-lg: clamp(2rem, 8vw, 4rem);
+  --fs-display-md: clamp(1.5rem, 5vw, 2.5rem);
+  --fs-h1: clamp(1.5rem, 5vw, 2.25rem);
+  --fs-h2: clamp(1.25rem, 4vw, 1.75rem);
+  --fs-h3: 1.125rem;
+  --fs-body: 1rem;
+  --fs-small: 0.875rem;
+  --fs-mono: 0.875rem;
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+
+  /* Touch */
+  --touch-min: 44px;
+
+  /* Z-index */
+  --z-floating: 50;
+  --z-modal: 100;
+}

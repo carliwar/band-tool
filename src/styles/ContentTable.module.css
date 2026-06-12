@@ -1,0 +1,44 @@
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-body);
+}
+.table th,
+.table td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--sp-3);
+  border-bottom: 1px solid var(--char);
+}
+.table th {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bone-dim);
+  background: var(--ash);
+}
+.table tr:last-child td { border-bottom: none; }
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+.card {
+  background: var(--ash);
+  border-left: 4px solid var(--blood);
+  padding: var(--sp-4);
+}
+.card .label {
+  font-family: var(--font-mono);
+  font-size: var(--fs-small);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--bone-dim);
+  margin-bottom: var(--sp-1);
+}
+.card .value {
+  margin-bottom: var(--sp-3);
+}
+.card .value:last-child { margin-bottom: 0; }
