@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { Home } from './routes/Home';
 import { Song } from './routes/Song';
+import { ThemeToggle } from './components/ThemeToggle';
 import { initDb } from './db/database';
 
 export function App() {
@@ -46,12 +47,15 @@ export function App() {
   }
 
   return (
-    <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/song/:id" element={<Song />} />
-        <Route path="*" element={<Home />} />
-      </Routes>
-    </BrowserRouter>
+    <>
+      <ThemeToggle />
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/song/:id" element={<Song />} />
+          <Route path="*" element={<Home />} />
+        </Routes>
+      </BrowserRouter>
+    </>
   );
 }

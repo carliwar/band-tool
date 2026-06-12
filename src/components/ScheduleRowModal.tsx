@@ -29,13 +29,13 @@ export function ScheduleRowModal({ songId, phaseId, onClose, onWillEdit }: Props
   const done = !!progress?.completed;
 
   return (
-    <Modal isOpen={!!phaseId} onClose={onClose} title={row.fase}>
+    <Modal isOpen={!!phaseId} onClose={onClose} title={row.fase} wide aside={<RulesContent />}>
       <section style={{ marginBottom: 'var(--sp-5)' }}>
         <div className="mono dim" style={{ fontSize: 'var(--fs-small)', marginBottom: 'var(--sp-2)' }}>
           {row.tiempo}
         </div>
 
-        <p className="serif" style={{ fontSize: '1.125rem', marginBottom: 'var(--sp-4)' }}>
+        <p className="serif" style={{ fontSize: '1.5rem', marginBottom: 'var(--sp-4)' }}>
           {row.actividad}
         </p>
 
@@ -79,24 +79,6 @@ export function ScheduleRowModal({ songId, phaseId, onClose, onWillEdit }: Props
         <RowNotesList songId={songId} phaseId={row.id} onWillEdit={onWillEdit} />
       </section>
 
-      <section
-        style={{
-          marginTop: 'var(--sp-6)',
-          paddingTop: 'var(--sp-5)',
-          borderTop: '2px solid var(--char)',
-        }}
-      >
-        <h3
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-h2)',
-            marginBottom: 'var(--sp-3)',
-          }}
-        >
-          Reglas fijas
-        </h3>
-        <RulesContent />
-      </section>
     </Modal>
   );
 }

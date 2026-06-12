@@ -93,3 +93,54 @@
   from { transform: translateY(-12px); opacity: 0.4; }
   to { transform: translateY(0); opacity: 1; }
 }
+
+/* Two-column layout for ScheduleRowModal */
+.wide {
+  /* mobile-first: same as .modal */
+}
+@media (min-width: 768px) {
+  .wide {
+    max-width: min(1100px, 92vw);
+  }
+}
+
+.cols {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  min-height: 0;
+}
+@media (min-width: 768px) {
+  .cols {
+    flex-direction: row;
+    overflow: hidden;
+  }
+}
+
+.leftCol {
+  flex: 1;
+  padding: var(--sp-4);
+  overflow-y: visible;
+}
+.rightCol {
+  flex: 1;
+  padding: var(--sp-4);
+  overflow-y: visible;
+  border-top: 2px solid var(--char);
+}
+@media (min-width: 768px) {
+  .leftCol {
+    padding: var(--sp-5);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .rightCol {
+    padding: var(--sp-5);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    border-top: none;
+    border-left: 2px solid var(--char);
+  }
+}

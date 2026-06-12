@@ -6,9 +6,11 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: ReactNode;
+  aside?: ReactNode;
+  wide?: boolean;
 }
 
-export function Modal({ isOpen, onClose, title, children }: ModalProps) {
+export function Modal({ isOpen, onClose, title, children, aside, wide }: ModalProps) {
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -35,14 +37,21 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
       aria-modal="true"
       aria-label={title}
     >
-      <div className={styles.modal}>
+      <div className={[styles.modal, wide ? styles.wide : ''].filter(Boolean).join(' ')}>
         <div className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
           <button className={styles.close} onClick={onClose} aria-label="Cerrar">
             ✕
           </button>
         </div>
-        <div className={styles.body}>{children}</div>
+        {aside ? (
+          <div className={styles.cols}>
+            <div className={styles.leftCol}>{children}</div>
+            <div className={styles.rightCol}>{aside}</div>
+          </div>
+        ) : (
+          <div className={styles.body}>{children}</div>
+        )}
       </div>
     </div>
   );

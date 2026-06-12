@@ -307,3 +307,9 @@ export function getTotalElapsed(songId: number, asOf: number = Date.now()): numb
   }
   return total;
 }
+
+/** Deletes all data (songs + everything via CASCADE). */
+export function deleteAllData(): void {
+  getDb().run('DELETE FROM songs');
+  notifyChange();
+}

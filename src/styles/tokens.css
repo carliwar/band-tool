@@ -44,3 +44,11 @@
   --z-floating: 50;
   --z-modal: 100;
 }
+
+[data-theme="light"] {
+  --ink: #f5f0e8;
+  --ash: #ebe5db;
+  --char: #c8c2b8;
+  --bone: #1a1714;
+  --bone-dim: #78706a;
+}

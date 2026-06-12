@@ -73,6 +73,13 @@ button.ghost {
 }
 button.ghost:hover { background: var(--ash); color: var(--bone); }
 
+button.danger {
+  background: var(--blood-bright);
+  border-color: var(--blood-bright);
+  color: #f5f0e8;
+}
+button.danger:hover { background: var(--blood); border-color: var(--blood); color: #f5f0e8; }
+
 button.small {
   min-height: 36px;
   padding: var(--sp-2) var(--sp-3);
@@ -136,4 +143,13 @@ hr {
   .page {
     padding: var(--sp-6) var(--sp-6) var(--sp-8);
   }
+}
+
+[data-theme="light"] body {
+  background-image: none;
+  background: var(--ink);
+}
+
+[data-theme="light"] button.primary {
+  color: #f5f0e8;
 }

@@ -70,7 +70,7 @@ npm run preview    # sirve dist/ local
 
 ## Reglas críticas (NO violar sin acuerdo del usuario)
 
-1. **NO existe botón "Borrar todo"**. Decisión explícita.
+1. **Botón "Borrar todo" existe con confirmación custom.** Elimina todos los datos vía `deleteAllData()` en `repository.ts`. El modal de confirmación usa `Modal.tsx` (no `window.confirm`).
 2. **Edición fuera de sesión requiere confirm.** Cualquier mutación (campo, checkbox, nota, attachment) debe pasar por `guard.guard(action)` del hook `useSessionGuard(songId)`. Si no hay sesión activa, abre `ResumeSessionModal`. Solo aplica si el usuario confirma (y se crea sesión nueva automáticamente).
 3. **Cada "Nueva sesión" es un row nuevo** en `work_sessions` (FK a song). Nunca actualizar `started_at` de una sesión existente.
 4. **Auto-save sin botón**. Todo cambio = `notifyChange()` → flush debounced.
