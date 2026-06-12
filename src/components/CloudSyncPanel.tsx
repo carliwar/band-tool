@@ -1,6 +1,34 @@
-import { useState } from 'react';
-import { Modal } from './Modal';
-import { validatePat, pushToGist, pullFromGist, hasBuildPat, getEffectivePat } from '../db/cloudSync';
+import { useEffect, useRef, useState } from 'react';
+import {
+  validatePat,
+  startAutoSync,
+  clearSyncStorage,
+  hasBuildPat,
+  getEffectivePat,
+  LS_GIST_ID_KEY,
+  type SyncStatus,
+} from '../db/cloudSync';
+
+function formatTs(ts: number): string {
+  const d = new Date(ts);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+}
+
+function StatusBadge({ status }: { status: SyncStatus }) {
+  if (status.state === 'idle') return null;
+  let label = '';
+  let color = 'var(--bone-dim)';
+  if (status.state === 'pushing') { label = '↑ Guardando…'; color = 'var(--gold)'; }
+  else if (status.state === 'pulling') { label = '↓ Actualizando…'; color = 'var(--gold)'; }
+  else if (status.state === 'synced') { label = `● Sincronizado ${formatTs(status.at)}`; color = 'var(--toxic)'; }
+  else if (status.state === 'error') { label = `⚠ ${status.message}`; color = 'var(--blood-bright)'; }
+  return (
+    <span style={{ color, fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small)' }}>
+      {label}
+    </span>
+  );
+}
 
 const LS_PAT = 'band-tool-gist-pat';
 const LS_GIST_ID = 'band-tool-gist-id';
@@ -15,94 +43,63 @@ function formatSync(ts: string | null): string {
 
 export function CloudSyncPanel() {
   const [pat, setPat] = useState(() => localStorage.getItem(LS_PAT) ?? '');
-  const [gistId, setGistId] = useState<string | null>(() => localStorage.getItem(LS_GIST_ID));
-  const [lastSync, setLastSync] = useState<string | null>(() => localStorage.getItem(LS_LAST_SYNC));
+  const [gistId, setGistId] = useState<string | null>(() => localStorage.getItem(LS_GIST_ID_KEY));
   const [patInput, setPatInput] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-  const [confirmPull, setConfirmPull] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>({ state: 'idle' });
+
+  const cleanupRef = useRef<(() => void) | null>(null);
 
   const isConnected = hasBuildPat || !!pat;
+  const effectivePat = getEffectivePat(pat);
 
-  function clearMessages() {
-    setError(null);
-    setInfo(null);
-  }
+  useEffect(() => {
+    if (!isConnected) return;
+    cleanupRef.current?.();
+    cleanupRef.current = startAutoSync(
+      effectivePat,
+      gistId,
+      (id) => {
+        setGistId(id);
+        localStorage.setItem(LS_GIST_ID_KEY, id);
+      },
+      setSyncStatus,
+    );
+    return () => {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    };
+    // effectivePat and gistId are intentionally only read on mount/reconnect
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isConnected, effectivePat]);
 
   async function handleConnect() {
-    clearMessages();
     const trimmed = patInput.trim();
     if (!trimmed) return;
-    setBusy(true);
+    setConnecting(true);
+    setConnectError(null);
     try {
       const valid = await validatePat(trimmed);
-      if (!valid) {
-        setError('Token inválido o sin permiso de Gist.');
-        return;
-      }
+      if (!valid) { setConnectError('Token inválido o sin permiso de Gist.'); return; }
       localStorage.setItem(LS_PAT, trimmed);
       setPat(trimmed);
       setPatInput('');
-      setInfo('Conectado correctamente.');
     } catch {
-      setError('No se pudo conectar. Verificá tu conexión a internet.');
+      setConnectError('No se pudo conectar. Verificá tu conexión a internet.');
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePush() {
-    clearMessages();
-    setBusy(true);
-    try {
-      const newId = await pushToGist(getEffectivePat(pat), gistId);
-      const ts = String(Date.now());
-      localStorage.setItem(LS_GIST_ID, newId);
-      localStorage.setItem(LS_LAST_SYNC, ts);
-      setGistId(newId);
-      setLastSync(ts);
-      setInfo('Base guardada en la nube ✓');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al guardar en la nube.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handlePull() {
-    if (!gistId) {
-      setError('Primero guardá la base en la nube al menos una vez.');
-      return;
-    }
-    setConfirmPull(true);
-  }
-
-  async function doPull() {
-    setConfirmPull(false);
-    clearMessages();
-    setBusy(true);
-    try {
-      await pullFromGist(getEffectivePat(pat), gistId!);
-      const ts = String(Date.now());
-      localStorage.setItem(LS_LAST_SYNC, ts);
-      setLastSync(ts);
-      setInfo('Base cargada desde la nube ✓');
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error al cargar desde la nube.');
-    } finally {
-      setBusy(false);
+      setConnecting(false);
     }
   }
 
   function handleDisconnect() {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
     localStorage.removeItem(LS_PAT);
-    localStorage.removeItem(LS_GIST_ID);
-    localStorage.removeItem(LS_LAST_SYNC);
+    clearSyncStorage();
     setPat('');
     setGistId(null);
-    setLastSync(null);
-    clearMessages();
+    setSyncStatus({ state: 'idle' });
   }
 
   return (
@@ -147,29 +144,25 @@ export function CloudSyncPanel() {
                 onChange={(e) => setPatInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleConnect(); }}
                 autoComplete="off"
-                disabled={busy}
+                disabled={connecting}
               />
             </div>
-            <button onClick={() => void handleConnect()} disabled={busy || !patInput.trim()}>
-              {busy ? 'Verificando…' : 'Conectar'}
+            <button onClick={() => void handleConnect()} disabled={connecting || !patInput.trim()}>
+              {connecting ? 'Verificando…' : 'Conectar'}
             </button>
           </div>
+          {connectError && (
+            <p style={{ marginTop: 'var(--sp-3)', color: 'var(--blood-bright)', fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small)' }}>
+              {connectError}
+            </p>
+          )}
         </>
       ) : (
-        <>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 'var(--sp-3)',
-              marginBottom: 'var(--sp-4)',
-            }}
-          >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 'var(--sp-3)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-1)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
               <span style={{ color: 'var(--toxic)', fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small)' }}>
-                ● {hasBuildPat ? 'Configurado' : 'Conectado'}
+                {hasBuildPat ? '● Configurado' : '● Conectado'}
               </span>
               {gistId && (
                 <span className="mono dim" style={{ fontSize: 'var(--fs-small)' }}>
@@ -177,72 +170,18 @@ export function CloudSyncPanel() {
                 </span>
               )}
             </div>
-            {!hasBuildPat && (
-              <button className="ghost small" onClick={handleDisconnect} disabled={busy}>
-                Desconectar
-              </button>
-            )}
+            <StatusBadge status={syncStatus} />
           </div>
-
-          <div style={{ marginBottom: 'var(--sp-3)' }}>
-            <span className="mono dim" style={{ fontSize: 'var(--fs-small)' }}>
-              Último sync: {formatSync(lastSync)}
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-            <button onClick={() => void handlePush()} disabled={busy}>
-              {busy ? '…' : '↑ Guardar en nube'}
+          {!hasBuildPat && (
+            <button className="ghost small" onClick={handleDisconnect}>
+              Desconectar
             </button>
-            <button onClick={() => void handlePull()} disabled={busy || !gistId}>
-              {busy ? '…' : '↓ Cargar desde nube'}
-            </button>
-          </div>
-        </>
-      )}
-
-      {error && (
-        <p
-          style={{
-            marginTop: 'var(--sp-3)',
-            color: 'var(--blood-bright)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--fs-small)',
-          }}
-        >
-          {error}
-        </p>
-      )}
-      {info && (
-        <p
-          style={{
-            marginTop: 'var(--sp-3)',
-            color: 'var(--toxic)',
-            fontFamily: 'var(--font-mono)',
-            fontSize: 'var(--fs-small)',
-          }}
-        >
-          {info}
-        </p>
-      )}
-
-      <Modal isOpen={confirmPull} onClose={() => setConfirmPull(false)} title="¿Cargar desde nube?">
-        <p
-          className="serif"
-          style={{ fontSize: '1.125rem', marginBottom: 'var(--sp-5)', color: 'var(--bone)' }}
-        >
-          Esto va a <strong style={{ color: 'var(--blood-bright)' }}>reemplazar toda la base local</strong> con
-          la versión guardada en la nube. Los cambios no guardados en la nube se perderán.
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-          <button className="danger" onClick={() => void doPull()}>
-            Sí, cargar desde nube
-          </button>
-          <button className="ghost" onClick={() => setConfirmPull(false)}>
-            Cancelar
-          </button>
+          )}
         </div>
-      </Modal>
+      )}
     </section>
   );
 }
+
+
+
