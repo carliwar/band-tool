@@ -3,6 +3,24 @@ import { flushNow } from './database';
 
 const GITHUB_API = 'https://api.github.com';
 const GIST_FILENAME = 'band-tool-db.sqlite.b64';
+const GIST_DESCRIPTION = 'band-tool database backup';
+
+/**
+ * PAT bakeado en el build vía VITE_GIST_PAT (GitHub Actions secret).
+ * NOTA DE SEGURIDAD: este valor queda visible en el bundle JS estático.
+ * El scope del token es solo `gist`, por lo que el riesgo es limitado
+ * (peor caso: lectura/escritura del Gist de backup de la banda).
+ * Para mayor seguridad, usar un proxy serverless como intermediario.
+ */
+const BUILD_PAT: string = (import.meta.env.VITE_GIST_PAT as string | undefined) ?? '';
+
+/** True cuando hay un PAT configurado en el build — no se necesita que el usuario lo ingrese. */
+export const hasBuildPat: boolean = BUILD_PAT.length > 0;
+
+/** Devuelve el PAT efectivo: build-time si existe, si no el provisto por el usuario. */
+export function getEffectivePat(localPat: string): string {
+  return BUILD_PAT || localPat;
+}
 
 function blobToBase64(bytes: Uint8Array): string {
   let bin = '';
@@ -35,6 +53,14 @@ async function checkResponse(res: Response, context: string): Promise<void> {
   }
 }
 
+/** Busca un Gist existente con la descripción de band-tool. Devuelve su ID o null. */
+async function findExistingGist(pat: string): Promise<string | null> {
+  const res = await fetch(`${GITHUB_API}/gists?per_page=100`, { headers: headers(pat) });
+  if (!res.ok) return null;
+  const gists = (await res.json()) as { id: string; description: string }[];
+  return gists.find((g) => g.description === GIST_DESCRIPTION)?.id ?? null;
+}
+
 /** Verifica que el PAT sea válido consultando /user. */
 export async function validatePat(pat: string): Promise<boolean> {
   const res = await fetch(`${GITHUB_API}/user`, { headers: headers(pat) });
@@ -43,21 +69,25 @@ export async function validatePat(pat: string): Promise<boolean> {
 
 /**
  * Sube la DB actual al Gist.
- * Si gistId es null crea un Gist nuevo (secreto). Devuelve el Gist ID.
+ * Si gistId es null, busca un Gist existente por descripción antes de crear uno nuevo.
+ * Devuelve el Gist ID.
  */
 export async function pushToGist(pat: string, gistId: string | null): Promise<string> {
   const bytes = getDbBlob();
   const content = blobToBase64(bytes);
 
+  // Auto-discover existing gist if no ID is stored locally
+  const resolvedId = gistId ?? (await findExistingGist(pat));
+
   const body = JSON.stringify({
-    description: 'band-tool database backup',
+    description: GIST_DESCRIPTION,
     public: false,
     files: { [GIST_FILENAME]: { content } },
   });
 
   let res: Response;
-  if (gistId) {
-    res = await fetch(`${GITHUB_API}/gists/${gistId}`, {
+  if (resolvedId) {
+    res = await fetch(`${GITHUB_API}/gists/${resolvedId}`, {
       method: 'PATCH',
       headers: headers(pat),
       body,

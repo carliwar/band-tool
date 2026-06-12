@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Modal } from './Modal';
-import { validatePat, pushToGist, pullFromGist } from '../db/cloudSync';
+import { validatePat, pushToGist, pullFromGist, hasBuildPat, getEffectivePat } from '../db/cloudSync';
 
 const LS_PAT = 'band-tool-gist-pat';
 const LS_GIST_ID = 'band-tool-gist-id';
@@ -23,7 +23,7 @@ export function CloudSyncPanel() {
   const [info, setInfo] = useState<string | null>(null);
   const [confirmPull, setConfirmPull] = useState(false);
 
-  const isConnected = !!pat;
+  const isConnected = hasBuildPat || !!pat;
 
   function clearMessages() {
     setError(null);
@@ -56,7 +56,7 @@ export function CloudSyncPanel() {
     clearMessages();
     setBusy(true);
     try {
-      const newId = await pushToGist(pat, gistId);
+      const newId = await pushToGist(getEffectivePat(pat), gistId);
       const ts = String(Date.now());
       localStorage.setItem(LS_GIST_ID, newId);
       localStorage.setItem(LS_LAST_SYNC, ts);
@@ -83,7 +83,7 @@ export function CloudSyncPanel() {
     clearMessages();
     setBusy(true);
     try {
-      await pullFromGist(pat, gistId!);
+      await pullFromGist(getEffectivePat(pat), gistId!);
       const ts = String(Date.now());
       localStorage.setItem(LS_LAST_SYNC, ts);
       setLastSync(ts);
@@ -169,7 +169,7 @@ export function CloudSyncPanel() {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)' }}>
               <span style={{ color: 'var(--toxic)', fontFamily: 'var(--font-mono)', fontSize: 'var(--fs-small)' }}>
-                ● Conectado
+                ● {hasBuildPat ? 'Configurado' : 'Conectado'}
               </span>
               {gistId && (
                 <span className="mono dim" style={{ fontSize: 'var(--fs-small)' }}>
@@ -177,9 +177,11 @@ export function CloudSyncPanel() {
                 </span>
               )}
             </div>
-            <button className="ghost small" onClick={handleDisconnect} disabled={busy}>
-              Desconectar
-            </button>
+            {!hasBuildPat && (
+              <button className="ghost small" onClick={handleDisconnect} disabled={busy}>
+                Desconectar
+              </button>
+            )}
           </div>
 
           <div style={{ marginBottom: 'var(--sp-3)' }}>
