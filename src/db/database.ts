@@ -1,4 +1,5 @@
 import initSqlJs, { type Database, type SqlJsStatic } from 'sql.js';
+import sqlWasmUrl from 'sql.js/dist/sql-wasm.wasm?url';
 import { get, set } from 'idb-keyval';
 
 const DB_KEY = 'band-tool-db-v1';
@@ -67,7 +68,7 @@ export async function initDb(): Promise<Database> {
   if (db) return db;
 
   SQL = await initSqlJs({
-    locateFile: (file) => `${import.meta.env.BASE_URL}${file}`,
+    locateFile: () => sqlWasmUrl,
   });
 
   const existing = (await get(DB_KEY)) as Uint8Array | undefined;
