@@ -3,6 +3,7 @@ import { Modal } from '../components/Modal';
 import { CreateSongForm } from '../components/CreateSongForm';
 import { SongList } from '../components/SongList';
 import { ExportImportPanel } from '../components/ExportImportPanel';
+import { CloudSyncPanel } from '../components/CloudSyncPanel';
 import { listSongs, deleteAllData } from '../db/repository';
 import { useDbVersion } from '../state/store';
 
@@ -87,6 +88,8 @@ export function Home() {
       )}
 
       <ExportImportPanel />
+
+      <CloudSyncPanel />
 
       {songs.length > 0 && (
         <div style={{ marginTop: 'var(--sp-6)', display: 'flex', justifyContent: 'flex-end' }}>

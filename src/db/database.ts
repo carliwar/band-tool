@@ -109,6 +109,11 @@ export function subscribe(fn: () => void): () => void {
   return () => listeners.delete(fn);
 }
 
+export function getDbBlob(): Uint8Array {
+  if (!db) throw new Error('DB not initialized');
+  return db.export();
+}
+
 export async function replaceDbWithBytes(bytes: Uint8Array): Promise<void> {
   if (!SQL) throw new Error('SQL not initialized');
   if (db) db.close();

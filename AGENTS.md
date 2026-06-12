@@ -127,6 +127,6 @@ GitHub Pages + GitHub Actions. Push a `main` → `.github/workflows/deploy.yml` 
 - No agregar markdown files de docs sin pedirlo el usuario (excepto `docs/prompts-history.md` que ya está aprobado).
 - No agregar dependencias UI (Tailwind, MUI, etc.) — el sistema de tokens es a propósito.
 - No agregar tests automáticos sin pedirlo.
-- No agregar sync cloud sin pedirlo (Fase 9 está pendiente y opcional).
+- No agregar sync cloud sin pedirlo (implementado en `src/db/cloudSync.ts` + `src/components/CloudSyncPanel.tsx` — GitHub Gist + PAT, scope `gist`).
 - No tocar el blob de `band-tool-db-v1` en IndexedDB directamente — usar siempre el repo.
 - No copiar `sql-wasm.wasm` a `public/` — Vite lo bundlea automáticamente via `?url` import (el archivo en `public/` quedó como remanente y puede borrarse en una limpieza).
