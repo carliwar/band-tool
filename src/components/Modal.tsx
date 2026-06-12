@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import styles from '../styles/Modal.module.css';
 
 interface ModalProps {
@@ -11,6 +11,30 @@ interface ModalProps {
 }
 
 export function Modal({ isOpen, onClose, title, children, aside, wide }: ModalProps) {
+  const pushedRef = useRef(false);
+
+  // Intercept browser back button: close modal instead of navigating away
+  useEffect(() => {
+    if (!isOpen) return;
+    history.pushState({ modal: true }, '');
+    pushedRef.current = true;
+
+    const onPop = () => {
+      pushedRef.current = false;
+      onClose();
+    };
+    window.addEventListener('popstate', onPop);
+
+    return () => {
+      window.removeEventListener('popstate', onPop);
+      // If modal was closed by ✕ / Esc / overlay (not by back button), pop the extra entry
+      if (pushedRef.current) {
+        pushedRef.current = false;
+        history.back();
+      }
+    };
+  }, [isOpen, onClose]);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
