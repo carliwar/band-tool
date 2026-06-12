@@ -41,4 +41,23 @@
   gap: var(--sp-3);
   flex-wrap: wrap;
 }
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+}
+
+.elapsed {
+  font-family: var(--font-mono);
+  font-size: var(--fs-h2);
+  color: var(--bone-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1;
+}
+  gap: var(--sp-3);
+  flex-wrap: wrap;
+}
 .meta .bpm { color: var(--gold); }
