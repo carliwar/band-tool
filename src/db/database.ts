@@ -123,3 +123,17 @@ export async function replaceDbWithBytes(bytes: Uint8Array): Promise<void> {
   await flushNow();
   listeners.forEach((fn) => fn());
 }
+
+/** Opens a temporary DB from bytes and counts songs, without replacing the active DB. */
+export function countSongsInBytes(bytes: Uint8Array): number {
+  if (!SQL) throw new Error('SQL not initialized');
+  const tmpDb = new SQL.Database(bytes);
+  try {
+    const result = tmpDb.exec('SELECT COUNT(*) FROM songs');
+    return result.length > 0 && result[0].values.length > 0 ? (result[0].values[0][0] as number) : 0;
+  } catch {
+    return 0;
+  } finally {
+    tmpDb.close();
+  }
+}

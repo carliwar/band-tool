@@ -1,4 +1,4 @@
-import { getDbBlob, replaceDbWithBytes, notifyChange, flushNow, subscribe } from './database';
+import { getDbBlob, replaceDbWithBytes, notifyChange, flushNow, subscribe, countSongsInBytes } from './database';
 import { countSongs } from './repository';
 
 const GITHUB_API = 'https://api.github.com';
@@ -389,6 +389,19 @@ export interface GistRevision {
   song_count: number | null;
 }
 
+/**
+ * Counts songs inside a base64-encoded SQLite blob without replacing the active DB.
+ * Returns the count, or null if the blob can't be parsed.
+ */
+async function countSongsInBlob(b64Content: string): Promise<number | null> {
+  try {
+    const bytes = base64ToBlob(b64Content);
+    return countSongsInBytes(bytes);
+  } catch {
+    return null;
+  }
+}
+
 /** Lists Gist revisions (most recent first). */
 export async function listGistRevisions(pat: string, gistId: string): Promise<GistRevision[]> {
   const res = await fetch(`${GITHUB_API}/gists/${gistId}`, { headers: headers(pat) });
@@ -396,7 +409,6 @@ export async function listGistRevisions(pat: string, gistId: string): Promise<Gi
   const data = (await res.json()) as {
     history: { version: string; committed_at: string }[];
   };
-  // Fetch meta for each revision to know song_count (only check a few recent ones)
   const revisions: GistRevision[] = [];
   const toCheck = data.history.slice(0, 20);
   for (const h of toCheck) {
@@ -405,10 +417,20 @@ export async function listGistRevisions(pat: string, gistId: string): Promise<Gi
       if (!revRes.ok) continue;
       const revData = (await revRes.json()) as { files: Record<string, { content: string } | undefined> };
       const meta = parseMetaFromGist(revData.files);
+      let songCount = meta?.song_count ?? null;
+
+      // For revisions without metadata, inspect the DB blob directly
+      if (songCount === null) {
+        const dbFile = revData.files[GIST_FILENAME];
+        if (dbFile?.content) {
+          songCount = await countSongsInBlob(dbFile.content);
+        }
+      }
+
       revisions.push({
         sha: h.version,
         committed_at: h.committed_at,
-        song_count: meta?.song_count ?? null,
+        song_count: songCount,
       });
     } catch {
       revisions.push({ sha: h.version, committed_at: h.committed_at, song_count: null });
@@ -437,6 +459,10 @@ export async function recoverLatestWithData(pat: string, gistId: string): Promis
   if (!withData) return { restored: false, revision: null };
   await restoreFromRevision(pat, gistId, withData.sha);
   // Push the recovered data back to Gist so it becomes the latest version
-  await pushToGist(pat, gistId);
+  const result = await pushToGist(pat, gistId);
+  // Update localStorage so auto-sync doesn't re-pull over this push
+  localStorage.setItem(LS_GIST_ID_KEY, result.id);
+  localStorage.setItem(LS_LAST_REMOTE_UPDATED, result.updated_at);
+  localStorage.setItem(LS_LAST_SYNC_KEY, String(Date.now()));
   return { restored: true, revision: withData };
 }
