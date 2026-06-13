@@ -132,6 +132,19 @@ hr {
 .blood { color: var(--blood-bright); }
 .gold { color: var(--gold); }
 
+/* Spinner */
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--char);
+  border-top-color: var(--gold);
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .page {
   min-height: 100%;
   padding: var(--sp-4) var(--sp-4) calc(var(--sp-8) + var(--touch-min));

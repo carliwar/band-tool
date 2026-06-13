@@ -66,6 +66,22 @@ async function checkResponse(res: Response, context: string): Promise<void> {
   }
 }
 
+interface GistFile {
+  content: string;
+  raw_url?: string;
+  truncated?: boolean;
+  size?: number;
+}
+
+/** Fetches the full content of a Gist file, using raw_url if content is truncated. */
+async function getFullFileContent(file: GistFile, pat: string): Promise<string> {
+  if (!file.truncated && file.content) return file.content;
+  if (!file.raw_url) throw new Error('File truncated but no raw_url available');
+  const res = await fetch(file.raw_url, { headers: { Authorization: `Bearer ${pat}` } });
+  if (!res.ok) throw new Error(`Failed to fetch raw file: ${res.status}`);
+  return res.text();
+}
+
 /** Busca un Gist existente con la descripción de band-tool. Devuelve su ID o null. */
 async function findExistingGist(pat: string): Promise<string | null> {
   const res = await fetch(`${GITHUB_API}/gists?per_page=100`, { headers: headers(pat) });
@@ -198,15 +214,16 @@ export async function pullFromGist(pat: string, gistId: string): Promise<void> {
   await checkResponse(res, 'pullFromGist');
 
   const data = (await res.json()) as {
-    files: Record<string, { content: string } | undefined>;
+    files: Record<string, GistFile | undefined>;
   };
 
   const file = data.files[GIST_FILENAME];
-  if (!file?.content) {
+  if (!file) {
     throw new Error('El Gist no contiene un backup de band-tool');
   }
 
-  const bytes = base64ToBlob(file.content);
+  const content = await getFullFileContent(file, pat);
+  const bytes = base64ToBlob(content);
   await replaceDbWithBytes(bytes);
   await flushNow();
   notifyChange();
@@ -410,20 +427,25 @@ export async function listGistRevisions(pat: string, gistId: string): Promise<Gi
     history: { version: string; committed_at: string }[];
   };
   const revisions: GistRevision[] = [];
-  const toCheck = data.history.slice(0, 20);
+  const toCheck = data.history.slice(0, 30);
   for (const h of toCheck) {
     try {
       const revRes = await fetch(`${GITHUB_API}/gists/${gistId}/${h.version}`, { headers: headers(pat) });
       if (!revRes.ok) continue;
-      const revData = (await revRes.json()) as { files: Record<string, { content: string } | undefined> };
-      const meta = parseMetaFromGist(revData.files);
+      const revData = (await revRes.json()) as { files: Record<string, GistFile | undefined> };
+      const meta = parseMetaFromGist(revData.files as Record<string, { content: string } | undefined>);
       let songCount = meta?.song_count ?? null;
 
       // For revisions without metadata, inspect the DB blob directly
       if (songCount === null) {
         const dbFile = revData.files[GIST_FILENAME];
-        if (dbFile?.content) {
-          songCount = await countSongsInBlob(dbFile.content);
+        if (dbFile) {
+          try {
+            const fullContent = await getFullFileContent(dbFile, pat);
+            songCount = await countSongsInBlob(fullContent);
+          } catch {
+            songCount = null;
+          }
         }
       }
 
@@ -443,10 +465,11 @@ export async function listGistRevisions(pat: string, gistId: string): Promise<Gi
 export async function restoreFromRevision(pat: string, gistId: string, sha: string): Promise<void> {
   const res = await fetch(`${GITHUB_API}/gists/${gistId}/${sha}`, { headers: headers(pat) });
   await checkResponse(res, 'restoreFromRevision');
-  const data = (await res.json()) as { files: Record<string, { content: string } | undefined> };
+  const data = (await res.json()) as { files: Record<string, GistFile | undefined> };
   const file = data.files[GIST_FILENAME];
-  if (!file?.content) throw new Error('La revisión no contiene un backup de band-tool');
-  const bytes = base64ToBlob(file.content);
+  if (!file) throw new Error('La revisión no contiene un backup de band-tool');
+  const content = await getFullFileContent(file, pat);
+  const bytes = base64ToBlob(content);
   await replaceDbWithBytes(bytes);
   await flushNow();
   notifyChange();
