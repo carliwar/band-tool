@@ -9,7 +9,81 @@ import {
   setAdminPin,
   verifyAdminPin,
   hasAdminPin,
+  recoverLatestWithData,
 } from '../db/cloudSync';
+
+function RecoverySection() {
+  const gistId = localStorage.getItem(LS_GIST_ID_KEY);
+  const pat = getEffectivePat('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  if (!hasBuildPat || !gistId) return null;
+
+  const handleRecover = async () => {
+    setBusy(true);
+    setResult(null);
+    try {
+      const { restored, revision } = await recoverLatestWithData(pat, gistId);
+      if (restored && revision) {
+        const date = new Date(revision.committed_at);
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const ts = `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+        setResult({ ok: true, msg: `Recuperado ✓ — ${revision.song_count} canciones del ${ts}` });
+      } else {
+        setResult({ ok: false, msg: 'No se encontró ninguna revisión con datos en el historial del Gist.' });
+      }
+    } catch (e) {
+      setResult({ ok: false, msg: e instanceof Error ? e.message : 'Error al recuperar' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      style={{
+        marginTop: 'var(--sp-6)',
+        paddingTop: 'var(--sp-5)',
+        borderTop: '1px solid var(--char)',
+      }}
+    >
+      <h3
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'var(--fs-h2)',
+          marginBottom: 'var(--sp-3)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
+        Recuperar datos
+      </h3>
+      <p className="dim" style={{ marginBottom: 'var(--sp-4)', fontSize: 'var(--fs-small)' }}>
+        Si perdiste datos, podés restaurar la última versión que tenía canciones desde el historial del Gist.
+      </p>
+      <button
+        className="primary"
+        onClick={() => void handleRecover()}
+        disabled={busy}
+      >
+        {busy ? 'Buscando…' : 'Restaurar última versión con datos'}
+      </button>
+      {result && (
+        <p
+          className="mono"
+          style={{
+            marginTop: 'var(--sp-3)',
+            fontSize: 'var(--fs-small)',
+            color: result.ok ? 'var(--toxic)' : 'var(--blood-bright)',
+          }}
+        >
+          {result.msg}
+        </p>
+      )}
+    </section>
+  );
+}
 
 function AdminPinSection() {
   const gistId = localStorage.getItem(LS_GIST_ID_KEY);
@@ -180,6 +254,8 @@ export function Settings() {
       <ExportImportPanel />
 
       <CloudSyncPanel />
+
+      <RecoverySection />
 
       <AdminPinSection />
 

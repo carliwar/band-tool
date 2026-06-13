@@ -114,6 +114,23 @@ Pidió ocultar la sección de backup, que se despliegue bajo demanda en una nuev
 
 **Notas:** No se implementaron roles de usuario ni merge inteligente. Sigue siendo last-write-wins con protección contra DB vacío. Las funciones de borrado siguen en el código por si se necesitan para admin futuro protegido por PIN.
 
+### Prompt 9 — Recuperación de datos + fix de bugs en sync
+**Problema:** Al guardar el PIN admin, `setAdminPin()` patcheaba el Gist (solo metadata), lo cual cambiaba el `updated_at` del Gist. El auto-sync detectaba el cambio y disparaba un pull, descargando el DB blob del Gist (que ya estaba vacío de un push previo desde un browser vacío). Resultado: datos locales reemplazados con DB vacía.
+
+**Bugs corregidos:**
+1. `setAdminPin()`: ahora actualiza `LS_LAST_REMOTE_UPDATED` en localStorage después de patchear, para que auto-sync no re-haga pull por el cambio de `updated_at`.
+2. `checkAndPull()`: nuevo guard — si local tiene canciones y remoto tiene 0, no hace pull (protege contra pull destructivo, simétrico al guard de push).
+
+**Feature de recuperación:**
+- `listGistRevisions()`: escanea las últimas 20 revisiones del Gist para encontrar cuáles tenían datos.
+- `restoreFromRevision()`: restaura DB desde una revisión específica del Gist.
+- `recoverLatestWithData()`: busca la revisión más reciente con `song_count > 0` y la restaura automáticamente. Luego hace push para que la versión recuperada sea la más reciente.
+- UI: nueva sección "Recuperar datos" en Settings con botón "Restaurar última versión con datos".
+
+**Archivos afectados:**
+- `src/db/cloudSync.ts` — fix setAdminPin, guard pull, funciones de recovery
+- `src/routes/Settings.tsx` — nueva sección RecoverySection
+
 **Decisión / qué se hizo:**
 - Nueva ruta `/settings` (`src/routes/Settings.tsx`) que contiene `ExportImportPanel`, `CloudSyncPanel` y un bloque "Zona peligrosa" con el botón "Borrar todo" + modal de confirmación reutilizando `Modal`.
 - Home.tsx queda limpio: ya no renderiza `ExportImportPanel`, `CloudSyncPanel` ni "Borrar todo". En su lugar, un botón `⚙ Settings` (clase `ghost small`) abajo a la derecha que navega a `/settings` con `useNavigate`.

@@ -281,7 +281,11 @@ export function startAutoSync(
 
       // If local is empty and remote has data, always pull regardless of timestamps
       const localCount = countSongs();
-      const forcePull = localCount === 0 && gistMeta.meta != null && gistMeta.meta.song_count > 0;
+      const remoteSongs = gistMeta.meta?.song_count ?? 0;
+      const forcePull = localCount === 0 && remoteSongs > 0;
+
+      // Guard: don't pull if it would destroy local data (remote has fewer songs)
+      if (localCount > 0 && remoteSongs === 0) return;
 
       if (!forcePull && gistMeta.updated_at <= lastKnownRemoteUpdated) return;
       pulling = true;
@@ -354,6 +358,13 @@ export async function setAdminPin(pat: string, gistId: string, pin: string): Pro
     body,
   });
   await checkResponse(res, 'setAdminPin');
+  // Update lastKnownRemoteUpdated so auto-sync doesn't re-pull after this meta-only patch
+  try {
+    const resData = (await res.json()) as { updated_at?: string };
+    if (resData.updated_at) {
+      localStorage.setItem(LS_LAST_REMOTE_UPDATED, resData.updated_at);
+    }
+  } catch { /* non-critical */ }
 }
 
 /** Verifies a PIN against the stored hash in the Gist. Returns true if correct. */
@@ -368,4 +379,64 @@ export async function verifyAdminPin(pat: string, gistId: string, pin: string): 
 export async function hasAdminPin(pat: string, gistId: string): Promise<boolean> {
   const remoteMeta = await fetchRemoteMeta(pat, gistId);
   return remoteMeta?.admin_pin_hash != null;
+}
+
+// ---------- Gist Revision Recovery ----------
+
+export interface GistRevision {
+  sha: string;
+  committed_at: string;
+  song_count: number | null;
+}
+
+/** Lists Gist revisions (most recent first). */
+export async function listGistRevisions(pat: string, gistId: string): Promise<GistRevision[]> {
+  const res = await fetch(`${GITHUB_API}/gists/${gistId}`, { headers: headers(pat) });
+  await checkResponse(res, 'listGistRevisions');
+  const data = (await res.json()) as {
+    history: { version: string; committed_at: string }[];
+  };
+  // Fetch meta for each revision to know song_count (only check a few recent ones)
+  const revisions: GistRevision[] = [];
+  const toCheck = data.history.slice(0, 20);
+  for (const h of toCheck) {
+    try {
+      const revRes = await fetch(`${GITHUB_API}/gists/${gistId}/${h.version}`, { headers: headers(pat) });
+      if (!revRes.ok) continue;
+      const revData = (await revRes.json()) as { files: Record<string, { content: string } | undefined> };
+      const meta = parseMetaFromGist(revData.files);
+      revisions.push({
+        sha: h.version,
+        committed_at: h.committed_at,
+        song_count: meta?.song_count ?? null,
+      });
+    } catch {
+      revisions.push({ sha: h.version, committed_at: h.committed_at, song_count: null });
+    }
+  }
+  return revisions;
+}
+
+/** Restores the DB from a specific Gist revision. */
+export async function restoreFromRevision(pat: string, gistId: string, sha: string): Promise<void> {
+  const res = await fetch(`${GITHUB_API}/gists/${gistId}/${sha}`, { headers: headers(pat) });
+  await checkResponse(res, 'restoreFromRevision');
+  const data = (await res.json()) as { files: Record<string, { content: string } | undefined> };
+  const file = data.files[GIST_FILENAME];
+  if (!file?.content) throw new Error('La revisión no contiene un backup de band-tool');
+  const bytes = base64ToBlob(file.content);
+  await replaceDbWithBytes(bytes);
+  await flushNow();
+  notifyChange();
+}
+
+/** Finds and restores the most recent Gist revision that had data (song_count > 0). */
+export async function recoverLatestWithData(pat: string, gistId: string): Promise<{ restored: boolean; revision: GistRevision | null }> {
+  const revisions = await listGistRevisions(pat, gistId);
+  const withData = revisions.find(r => r.song_count !== null && r.song_count > 0);
+  if (!withData) return { restored: false, revision: null };
+  await restoreFromRevision(pat, gistId, withData.sha);
+  // Push the recovered data back to Gist so it becomes the latest version
+  await pushToGist(pat, gistId);
+  return { restored: true, revision: withData };
 }
