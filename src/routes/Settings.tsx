@@ -16,6 +16,7 @@ function RecoverySection() {
   const gistId = localStorage.getItem(LS_GIST_ID_KEY);
   const pat = getEffectivePat('');
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState('');
   const [result, setResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   if (!hasBuildPat || !gistId) return null;
@@ -23,15 +24,17 @@ function RecoverySection() {
   const handleRecover = async () => {
     setBusy(true);
     setResult(null);
+    setProgress('');
     try {
-      const { restored, revision } = await recoverLatestWithData(pat, gistId);
+      const { restored, revision } = await recoverLatestWithData(pat, gistId, setProgress);
       if (restored && revision) {
         const date = new Date(revision.committed_at);
         const pad = (n: number) => String(n).padStart(2, '0');
         const ts = `${pad(date.getDate())}/${pad(date.getMonth() + 1)}/${date.getFullYear()} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
         setResult({ ok: true, msg: `Recuperado ✓ — ${revision.song_count} canciones del ${ts}. Recargando…` });
-        // Full reload to ensure all components re-read from restored DB
-        setTimeout(() => window.location.reload(), 1500);
+        setTimeout(() => {
+          window.location.href = import.meta.env.BASE_URL;
+        }, 1500);
       } else {
         setResult({ ok: false, msg: 'No se encontró ninguna revisión con datos en el historial del Gist.' });
       }
@@ -75,7 +78,7 @@ function RecoverySection() {
         <div style={{ marginTop: 'var(--sp-3)', display: 'flex', alignItems: 'center', gap: 'var(--sp-2)' }}>
           <span className="spinner" />
           <span className="mono dim" style={{ fontSize: 'var(--fs-small)' }}>
-            Escaneando revisiones del Gist…
+            {progress || 'Iniciando…'}
           </span>
         </div>
       )}

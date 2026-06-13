@@ -403,89 +403,89 @@ export async function hasAdminPin(pat: string, gistId: string): Promise<boolean>
 export interface GistRevision {
   sha: string;
   committed_at: string;
-  song_count: number | null;
+  song_count: number;
 }
 
 /**
- * Counts songs inside a base64-encoded SQLite blob without replacing the active DB.
- * Returns the count, or null if the blob can't be parsed.
+ * Tries to download the full DB blob from a Gist revision.
+ * Handles truncated content by using raw_url.
+ * Returns the decoded bytes or null if it fails.
  */
-async function countSongsInBlob(b64Content: string): Promise<number | null> {
+async function downloadRevisionBlob(
+  pat: string,
+  gistId: string,
+  sha: string,
+): Promise<Uint8Array | null> {
   try {
-    const bytes = base64ToBlob(b64Content);
-    return countSongsInBytes(bytes);
+    const res = await fetch(`${GITHUB_API}/gists/${gistId}/${sha}`, { headers: headers(pat) });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { files: Record<string, GistFile | undefined> };
+    const file = data.files[GIST_FILENAME];
+    if (!file) return null;
+
+    const content = await getFullFileContent(file, pat);
+    if (!content || content.length < 100) return null; // too small to be a real DB
+
+    return base64ToBlob(content);
   } catch {
     return null;
   }
 }
 
-/** Lists Gist revisions (most recent first). */
-export async function listGistRevisions(pat: string, gistId: string): Promise<GistRevision[]> {
+/**
+ * Scans Gist history and finds the most recent revision that contains a valid
+ * SQLite database with at least 1 song. Restores it as the active DB and
+ * pushes it back to the Gist as the latest version.
+ *
+ * Uses a progress callback so the UI can show which revision is being checked.
+ */
+export async function recoverLatestWithData(
+  pat: string,
+  gistId: string,
+  onProgress?: (msg: string) => void,
+): Promise<{ restored: boolean; revision: GistRevision | null }> {
+  onProgress?.('Obteniendo historial del Gist…');
+
   const res = await fetch(`${GITHUB_API}/gists/${gistId}`, { headers: headers(pat) });
-  await checkResponse(res, 'listGistRevisions');
-  const data = (await res.json()) as {
+  await checkResponse(res, 'recoverLatestWithData');
+  const gistData = (await res.json()) as {
     history: { version: string; committed_at: string }[];
   };
-  const revisions: GistRevision[] = [];
-  const toCheck = data.history.slice(0, 30);
-  for (const h of toCheck) {
-    try {
-      const revRes = await fetch(`${GITHUB_API}/gists/${gistId}/${h.version}`, { headers: headers(pat) });
-      if (!revRes.ok) continue;
-      const revData = (await revRes.json()) as { files: Record<string, GistFile | undefined> };
-      const meta = parseMetaFromGist(revData.files as Record<string, { content: string } | undefined>);
-      let songCount = meta?.song_count ?? null;
 
-      // For revisions without metadata, inspect the DB blob directly
-      if (songCount === null) {
-        const dbFile = revData.files[GIST_FILENAME];
-        if (dbFile) {
-          try {
-            const fullContent = await getFullFileContent(dbFile, pat);
-            songCount = await countSongsInBlob(fullContent);
-          } catch {
-            songCount = null;
-          }
-        }
-      }
-
-      revisions.push({
-        sha: h.version,
-        committed_at: h.committed_at,
-        song_count: songCount,
-      });
-    } catch {
-      revisions.push({ sha: h.version, committed_at: h.committed_at, song_count: null });
-    }
+  const history = gistData.history.slice(0, 30);
+  if (history.length === 0) {
+    return { restored: false, revision: null };
   }
-  return revisions;
-}
 
-/** Restores the DB from a specific Gist revision. */
-export async function restoreFromRevision(pat: string, gistId: string, sha: string): Promise<void> {
-  const res = await fetch(`${GITHUB_API}/gists/${gistId}/${sha}`, { headers: headers(pat) });
-  await checkResponse(res, 'restoreFromRevision');
-  const data = (await res.json()) as { files: Record<string, GistFile | undefined> };
-  const file = data.files[GIST_FILENAME];
-  if (!file) throw new Error('La revisión no contiene un backup de band-tool');
-  const content = await getFullFileContent(file, pat);
-  const bytes = base64ToBlob(content);
-  await replaceDbWithBytes(bytes);
-  await flushNow();
-  notifyChange();
-}
+  for (let i = 0; i < history.length; i++) {
+    const h = history[i];
+    onProgress?.(`Revisando versión ${i + 1} de ${history.length}…`);
 
-/** Finds and restores the most recent Gist revision that had data (song_count > 0). */
-export async function recoverLatestWithData(pat: string, gistId: string): Promise<{ restored: boolean; revision: GistRevision | null }> {
-  const revisions = await listGistRevisions(pat, gistId);
-  const withData = revisions.find(r => r.song_count !== null && r.song_count > 0);
-  if (!withData) return { restored: false, revision: null };
-  await restoreFromRevision(pat, gistId, withData.sha);
-  // Push the recovered data back to Gist so it becomes the latest version
-  const result = await pushToGist(pat, gistId);
-  // Update localStorage so auto-sync doesn't re-pull over this push
-  localStorage.setItem(LS_GIST_ID_KEY, result.id);
-  localStorage.setItem(LS_LAST_REMOTE_UPDATED, result.updated_at);
-  localStorage.setItem(LS_LAST_SYNC_KEY, String(Date.now()));
-  return { restored: true, revision: withData };
+    const bytes = await downloadRevisionBlob(pat, gistId, h.version);
+    if (!bytes) continue;
+
+    // Check if this blob actually has songs using a temp DB
+    const songCount = countSongsInBytes(bytes);
+    if (songCount === 0) continue;
+
+    // Found a revision with data! Replace the active DB.
+    onProgress?.(`Encontradas ${songCount} canciones. Restaurando…`);
+    await replaceDbWithBytes(bytes);
+    await flushNow();
+    notifyChange();
+
+    // Push recovered data back to Gist so it becomes the latest version
+    onProgress?.('Subiendo al Gist…');
+    const result = await pushToGist(pat, gistId);
+    localStorage.setItem(LS_GIST_ID_KEY, result.id);
+    localStorage.setItem(LS_LAST_REMOTE_UPDATED, result.updated_at);
+    localStorage.setItem(LS_LAST_SYNC_KEY, String(Date.now()));
+
+    return {
+      restored: true,
+      revision: { sha: h.version, committed_at: h.committed_at, song_count: songCount },
+    };
+  }
+
+  return { restored: false, revision: null };
 }
