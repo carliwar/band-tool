@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { addNote, deleteNote, listNotes } from '../db/repository';
+import { addNote, listNotes } from '../db/repository';
 import { useDbVersion } from '../state/store';
 
 interface Props {
@@ -83,15 +83,6 @@ export function RowNotesList({ songId, phaseId, onWillEdit }: Props) {
                 </div>
                 <div style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{n.text}</div>
               </div>
-              <button
-                className="ghost small"
-                onClick={() => onWillEdit(() => deleteNote(n.id, songId))}
-                aria-label="Eliminar nota"
-                title="Eliminar"
-                style={{ flex: '0 0 auto' }}
-              >
-                ✕
-              </button>
             </li>
           ))}
         </ul>

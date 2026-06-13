@@ -74,6 +74,46 @@ Pidió agregar "historial de prompts o algo que ayude a interpretar mejor próxi
 ### Prompt 7 — Página de Settings
 Pidió ocultar la sección de backup, que se despliegue bajo demanda en una nueva página llamada Settings, donde también esté el botón de "Borrar todo".
 
+## 2026-06-13 — Protección contra borrado + Sync seguro
+
+### Prompt 8 — Proteger sync contra push destructivo + app append-only
+**Problema:** al abrir la app en un navegador vacío (o después de borrar datos) y presionar sync, el DB vacío sobreescribía el Gist y se propagaba a todos los dispositivos. 2-3 miembros de la banda usan la app.
+
+**Decisiones del usuario:**
+- **Nada se borra:** notas, attachments y canciones son append-only + editables. Borrar está prohibido en toda la UI.
+- **"Borrar todo" se bloquea completamente** — ni siquiera localmente.
+- **Owner = PIN:** un PIN/password que solo el admin conoce (hash SHA-256 almacenado en el Gist metadata).
+- **Editar sí, borrar no:** campos, estados (checkboxes) y texto se pueden modificar.
+
+**Resultado — 3 fases implementadas:**
+
+**Fase 1 — Eliminar toda capacidad de borrado en la UI:**
+- `RowNotesList.tsx`: removido botón ✕ que llamaba `deleteNote()`.
+- `AttachmentsList.tsx`: removido botón ✕ que llamaba `deleteAttachment()`.
+- `Settings.tsx`: eliminada sección completa "Zona peligrosa" + modal de confirmación + imports de `deleteAllData`, `useState`, `Modal`, `listSongs`.
+- Funciones `deleteNote()`, `deleteAttachment()`, `deleteAllData()` se mantienen en `repository.ts` como infraestructura (sin UI que las invoque).
+
+**Fase 2 — Sync seguro (guard de push destructivo):**
+- `cloudSync.ts`: nuevo archivo `band-tool-meta.json` en el Gist con `{ song_count, pushed_at, device_id, admin_pin_hash }`.
+- Cada push escribe DB blob + metadata. `getGistMeta()` ahora parsea metadata también.
+- Guard en `doPush()`: si local tiene 0 canciones y remoto >0 → hace pull automático en vez de push.
+- Guard en `checkAndPull()`: si local está vacío y remoto tiene datos → fuerza pull sin importar timestamps.
+- `repository.ts`: nueva función `countSongs()` como helper para el guard.
+
+**Fase 3 — PIN admin (infraestructura):**
+- `cloudSync.ts`: funciones `setAdminPin()`, `verifyAdminPin()`, `hasAdminPin()` con hash SHA-256 almacenado en Gist metadata.
+- `Settings.tsx`: nueva sección "PIN de administrador" para crear/cambiar PIN. Requiere PIN actual para cambiar.
+- El PIN es infraestructura lista para proteger futuras acciones privilegiadas (ej: restaurar "Borrar todo" protegido).
+
+**Archivos afectados:**
+- `src/components/RowNotesList.tsx` — removido botón eliminar
+- `src/components/AttachmentsList.tsx` — removido botón eliminar
+- `src/routes/Settings.tsx` — removida zona peligrosa, agregada sección PIN admin
+- `src/db/cloudSync.ts` — metadata en Gist, guard de push, funciones PIN
+- `src/db/repository.ts` — agregado `countSongs()`
+
+**Notas:** No se implementaron roles de usuario ni merge inteligente. Sigue siendo last-write-wins con protección contra DB vacío. Las funciones de borrado siguen en el código por si se necesitan para admin futuro protegido por PIN.
+
 **Decisión / qué se hizo:**
 - Nueva ruta `/settings` (`src/routes/Settings.tsx`) que contiene `ExportImportPanel`, `CloudSyncPanel` y un bloque "Zona peligrosa" con el botón "Borrar todo" + modal de confirmación reutilizando `Modal`.
 - Home.tsx queda limpio: ya no renderiza `ExportImportPanel`, `CloudSyncPanel` ni "Borrar todo". En su lugar, un botón `⚙ Settings` (clase `ghost small`) abajo a la derecha que navega a `/settings` con `useNavigate`.

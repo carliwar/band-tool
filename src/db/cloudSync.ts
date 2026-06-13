@@ -1,8 +1,11 @@
 import { getDbBlob, replaceDbWithBytes, notifyChange, flushNow, subscribe } from './database';
+import { countSongs } from './repository';
 
 const GITHUB_API = 'https://api.github.com';
 const GIST_FILENAME = 'band-tool-db.sqlite.b64';
+const META_FILENAME = 'band-tool-meta.json';
 const GIST_DESCRIPTION = 'band-tool database backup';
+const LS_DEVICE_ID_KEY = 'band-tool-device-id';
 
 export const LS_GIST_ID_KEY = 'band-tool-gist-id';
 export const LS_LAST_SYNC_KEY = 'band-tool-gist-last-sync';
@@ -78,12 +81,62 @@ export function clearSyncStorage(): void {
   localStorage.removeItem(LS_LAST_REMOTE_UPDATED);
 }
 
+function getDeviceId(): string {
+  let id = localStorage.getItem(LS_DEVICE_ID_KEY);
+  if (!id) {
+    id = crypto.randomUUID();
+    localStorage.setItem(LS_DEVICE_ID_KEY, id);
+  }
+  return id;
+}
+
+export interface GistMeta {
+  song_count: number;
+  pushed_at: number;
+  device_id: string;
+  admin_pin_hash: string | null;
+}
+
+function buildMeta(songCount: number, existingMeta: GistMeta | null): GistMeta {
+  return {
+    song_count: songCount,
+    pushed_at: Date.now(),
+    device_id: getDeviceId(),
+    admin_pin_hash: existingMeta?.admin_pin_hash ?? null,
+  };
+}
+
+async function hashPin(pin: string): Promise<string> {
+  const data = new TextEncoder().encode(pin);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Read the metadata file from a Gist response payload. */
+function parseMetaFromGist(files: Record<string, { content: string } | undefined>): GistMeta | null {
+  const file = files[META_FILENAME];
+  if (!file?.content) return null;
+  try {
+    return JSON.parse(file.content) as GistMeta;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch only the metadata file from the Gist (uses full Gist fetch but only reads meta). */
+async function fetchRemoteMeta(pat: string, gistId: string): Promise<GistMeta | null> {
+  const res = await fetch(`${GITHUB_API}/gists/${gistId}`, { headers: headers(pat) });
+  if (!res.ok) return null;
+  const data = (await res.json()) as { files: Record<string, { content: string } | undefined> };
+  return parseMetaFromGist(data.files);
+}
+
 /** Descarga solo metadatos del Gist para detectar cambios remotos sin transferir el blob. */
-async function getGistMeta(pat: string, gistId: string): Promise<{ updated_at: string }> {
+async function getGistMeta(pat: string, gistId: string): Promise<{ updated_at: string; meta: GistMeta | null }> {
   const res = await fetch(`${GITHUB_API}/gists/${gistId}`, { headers: headers(pat) });
   await checkResponse(res, 'getGistMeta');
-  const data = (await res.json()) as { updated_at: string };
-  return { updated_at: data.updated_at };
+  const data = (await res.json()) as { updated_at: string; files: Record<string, { content: string } | undefined> };
+  return { updated_at: data.updated_at, meta: parseMetaFromGist(data.files) };
 }
 
 /** Verifica que el PAT sea válido consultando /user. */
@@ -97,9 +150,15 @@ export async function validatePat(pat: string): Promise<boolean> {
  * Si gistId es null, busca un Gist existente por descripción antes de crear uno nuevo.
  * Devuelve el Gist ID.
  */
-export async function pushToGist(pat: string, gistId: string | null): Promise<{ id: string; updated_at: string }> {
+export async function pushToGist(
+  pat: string,
+  gistId: string | null,
+  existingMeta: GistMeta | null = null,
+): Promise<{ id: string; updated_at: string }> {
   const bytes = getDbBlob();
   const content = blobToBase64(bytes);
+  const localCount = countSongs();
+  const meta = buildMeta(localCount, existingMeta);
 
   // Auto-discover existing gist if no ID is stored locally
   const resolvedId = gistId ?? (await findExistingGist(pat));
@@ -107,7 +166,10 @@ export async function pushToGist(pat: string, gistId: string | null): Promise<{ 
   const body = JSON.stringify({
     description: GIST_DESCRIPTION,
     public: false,
-    files: { [GIST_FILENAME]: { content } },
+    files: {
+      [GIST_FILENAME]: { content },
+      [META_FILENAME]: { content: JSON.stringify(meta, null, 2) },
+    },
   });
 
   let res: Response;
@@ -170,12 +232,32 @@ export function startAutoSync(
   const PULL_COOLDOWN = 12_000;
   let lastKnownRemoteUpdated = localStorage.getItem(LS_LAST_REMOTE_UPDATED) ?? '';
 
+  let cachedRemoteMeta: GistMeta | null = null;
+
   async function doPush(): Promise<void> {
     if (pushing || pulling) return;
+
+    // --- Guard: prevent pushing empty/reduced DB over a populated remote ---
+    const localCount = countSongs();
+    if (gistId && localCount === 0) {
+      // Local is empty — check if remote has data
+      try {
+        const remoteMeta = cachedRemoteMeta ?? await fetchRemoteMeta(pat, gistId);
+        if (remoteMeta && remoteMeta.song_count > 0) {
+          // Remote has data, local is empty → pull instead of push
+          await checkAndPull();
+          return;
+        }
+      } catch {
+        // Can't verify remote — refuse to push empty DB to be safe
+        return;
+      }
+    }
+
     pushing = true;
     onStatus({ state: 'pushing' });
     try {
-      const result = await pushToGist(pat, gistId);
+      const result = await pushToGist(pat, gistId, cachedRemoteMeta);
       gistId = result.id;
       onGistId(result.id);
       localStorage.setItem(LS_GIST_ID_KEY, result.id);
@@ -194,15 +276,21 @@ export function startAutoSync(
   async function checkAndPull(): Promise<void> {
     if (!gistId || pushing || pulling) return;
     try {
-      const meta = await getGistMeta(pat, gistId);
-      if (meta.updated_at <= lastKnownRemoteUpdated) return;
+      const gistMeta = await getGistMeta(pat, gistId);
+      cachedRemoteMeta = gistMeta.meta;
+
+      // If local is empty and remote has data, always pull regardless of timestamps
+      const localCount = countSongs();
+      const forcePull = localCount === 0 && gistMeta.meta != null && gistMeta.meta.song_count > 0;
+
+      if (!forcePull && gistMeta.updated_at <= lastKnownRemoteUpdated) return;
       pulling = true;
       lastPullAt = Date.now();
       onStatus({ state: 'pulling' });
       try {
         await pullFromGist(pat, gistId);
-        lastKnownRemoteUpdated = meta.updated_at;
-        localStorage.setItem(LS_LAST_REMOTE_UPDATED, meta.updated_at);
+        lastKnownRemoteUpdated = gistMeta.updated_at;
+        localStorage.setItem(LS_LAST_REMOTE_UPDATED, gistMeta.updated_at);
         const ts = Date.now();
         localStorage.setItem(LS_LAST_SYNC_KEY, String(ts));
         onStatus({ state: 'synced', at: ts });
@@ -243,4 +331,41 @@ export function startAutoSync(
       document.removeEventListener('visibilitychange', onVisibility);
     },
   };
+}
+
+// ---------- Admin PIN ----------
+
+/** Sets the admin PIN in the Gist metadata. Requires existing PAT & gist ID. */
+export async function setAdminPin(pat: string, gistId: string, pin: string): Promise<void> {
+  const pinHash = await hashPin(pin);
+  const remoteMeta = await fetchRemoteMeta(pat, gistId);
+  const meta: GistMeta = {
+    song_count: remoteMeta?.song_count ?? countSongs(),
+    pushed_at: remoteMeta?.pushed_at ?? Date.now(),
+    device_id: remoteMeta?.device_id ?? getDeviceId(),
+    admin_pin_hash: pinHash,
+  };
+  const body = JSON.stringify({
+    files: { [META_FILENAME]: { content: JSON.stringify(meta, null, 2) } },
+  });
+  const res = await fetch(`${GITHUB_API}/gists/${gistId}`, {
+    method: 'PATCH',
+    headers: headers(pat),
+    body,
+  });
+  await checkResponse(res, 'setAdminPin');
+}
+
+/** Verifies a PIN against the stored hash in the Gist. Returns true if correct. */
+export async function verifyAdminPin(pat: string, gistId: string, pin: string): Promise<boolean> {
+  const remoteMeta = await fetchRemoteMeta(pat, gistId);
+  if (!remoteMeta?.admin_pin_hash) return false;
+  const pinHash = await hashPin(pin);
+  return pinHash === remoteMeta.admin_pin_hash;
+}
+
+/** Checks if an admin PIN has been configured. */
+export async function hasAdminPin(pat: string, gistId: string): Promise<boolean> {
+  const remoteMeta = await fetchRemoteMeta(pat, gistId);
+  return remoteMeta?.admin_pin_hash != null;
 }

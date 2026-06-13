@@ -2,7 +2,6 @@ import { useRef, useState } from 'react';
 import {
   addFile,
   addLink,
-  deleteAttachment,
   getAttachmentBlob,
   listAttachments,
 } from '../db/repository';
@@ -180,14 +179,6 @@ export function AttachmentsList({ songId, onWillEdit }: Props) {
                   Descargar
                 </button>
               )}
-              <button
-                className="ghost small"
-                aria-label="Eliminar"
-                title="Eliminar"
-                onClick={() => onWillEdit(() => deleteAttachment(a.id, songId))}
-              >
-                ✕
-              </button>
             </li>
           ))}
         </ul>

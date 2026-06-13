@@ -313,3 +313,15 @@ export function deleteAllData(): void {
   getDb().run('DELETE FROM songs');
   notifyChange();
 }
+
+/** Returns the number of songs in the database. */
+export function countSongs(): number {
+  const db = getDb();
+  const stmt = db.prepare('SELECT COUNT(*) as cnt FROM songs');
+  try {
+    stmt.step();
+    return (stmt.getAsObject() as { cnt: number }).cnt;
+  } finally {
+    stmt.free();
+  }
+}

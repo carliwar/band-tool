@@ -1,16 +1,161 @@
-import { useState } from 'react';
-import { Modal } from '../components/Modal';
+import { useState, useEffect } from 'react';
 import { ExportImportPanel } from '../components/ExportImportPanel';
 import { CloudSyncPanel } from '../components/CloudSyncPanel';
 import { FloatingHomeButton } from '../components/FloatingHomeButton';
-import { listSongs, deleteAllData } from '../db/repository';
-import { useDbVersion } from '../state/store';
+import {
+  hasBuildPat,
+  getEffectivePat,
+  LS_GIST_ID_KEY,
+  setAdminPin,
+  verifyAdminPin,
+  hasAdminPin,
+} from '../db/cloudSync';
+
+function AdminPinSection() {
+  const gistId = localStorage.getItem(LS_GIST_ID_KEY);
+  const pat = getEffectivePat('');
+  const [pinExists, setPinExists] = useState<boolean | null>(null);
+  const [currentPin, setCurrentPin] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (!pat || !gistId) return;
+    void hasAdminPin(pat, gistId).then(setPinExists);
+  }, [pat, gistId]);
+
+  if (!hasBuildPat || !gistId) return null;
+  if (pinExists === null) return null; // loading
+
+  const handleCreate = async () => {
+    if (newPin.length < 4) { setMsg('Mínimo 4 caracteres'); return; }
+    if (newPin !== confirmPin) { setMsg('Los PIN no coinciden'); return; }
+    setBusy(true);
+    setMsg('');
+    try {
+      await setAdminPin(pat, gistId, newPin);
+      setPinExists(true);
+      setNewPin('');
+      setConfirmPin('');
+      setMsg('PIN creado ✓');
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleChange = async () => {
+    if (!currentPin) { setMsg('Ingresá el PIN actual'); return; }
+    if (newPin.length < 4) { setMsg('Mínimo 4 caracteres'); return; }
+    if (newPin !== confirmPin) { setMsg('Los PIN no coinciden'); return; }
+    setBusy(true);
+    setMsg('');
+    try {
+      const ok = await verifyAdminPin(pat, gistId, currentPin);
+      if (!ok) { setMsg('PIN actual incorrecto'); setBusy(false); return; }
+      await setAdminPin(pat, gistId, newPin);
+      setCurrentPin('');
+      setNewPin('');
+      setConfirmPin('');
+      setMsg('PIN actualizado ✓');
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : 'Error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section
+      style={{
+        marginTop: 'var(--sp-6)',
+        paddingTop: 'var(--sp-5)',
+        borderTop: '1px solid var(--char)',
+      }}
+    >
+      <h3
+        style={{
+          fontFamily: 'var(--font-display)',
+          fontSize: 'var(--fs-h2)',
+          marginBottom: 'var(--sp-3)',
+          textTransform: 'uppercase',
+          letterSpacing: '0.02em',
+        }}
+      >
+        PIN de administrador
+      </h3>
+      <p className="dim" style={{ marginBottom: 'var(--sp-4)', fontSize: 'var(--fs-small)' }}>
+        {pinExists
+          ? 'Ya hay un PIN configurado. Solo quien lo conozca podrá realizar acciones privilegiadas.'
+          : 'Configurá un PIN para proteger acciones administrativas.'}
+      </p>
+
+      <div style={{ display: 'grid', gap: 'var(--sp-3)', maxWidth: '320px' }}>
+        {pinExists && (
+          <div>
+            <label htmlFor="pin-current" style={{ fontSize: 'var(--fs-small)' }}>PIN actual</label>
+            <input
+              id="pin-current"
+              type="password"
+              value={currentPin}
+              onChange={(e) => setCurrentPin(e.target.value)}
+              autoComplete="off"
+              style={{ fontFamily: 'var(--font-mono)' }}
+            />
+          </div>
+        )}
+        <div>
+          <label htmlFor="pin-new" style={{ fontSize: 'var(--fs-small)' }}>
+            {pinExists ? 'Nuevo PIN' : 'PIN'}
+          </label>
+          <input
+            id="pin-new"
+            type="password"
+            value={newPin}
+            onChange={(e) => setNewPin(e.target.value)}
+            placeholder="mínimo 4 caracteres"
+            autoComplete="off"
+            style={{ fontFamily: 'var(--font-mono)' }}
+          />
+        </div>
+        <div>
+          <label htmlFor="pin-confirm" style={{ fontSize: 'var(--fs-small)' }}>Confirmar PIN</label>
+          <input
+            id="pin-confirm"
+            type="password"
+            value={confirmPin}
+            onChange={(e) => setConfirmPin(e.target.value)}
+            autoComplete="off"
+            style={{ fontFamily: 'var(--font-mono)' }}
+          />
+        </div>
+        <button
+          className="primary small"
+          onClick={() => void (pinExists ? handleChange() : handleCreate())}
+          disabled={busy}
+        >
+          {pinExists ? 'Cambiar PIN' : 'Crear PIN'}
+        </button>
+        {msg && (
+          <span
+            className="mono"
+            style={{
+              fontSize: 'var(--fs-small)',
+              color: msg.includes('✓') ? 'var(--toxic)' : 'var(--blood-bright)',
+            }}
+          >
+            {msg}
+          </span>
+        )}
+      </div>
+    </section>
+  );
+}
 
 export function Settings() {
-  const dbV = useDbVersion();
-  const songs = listSongs();
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  void dbV;
 
   return (
     <div className="page">
@@ -36,60 +181,9 @@ export function Settings() {
 
       <CloudSyncPanel />
 
-      <section
-        style={{
-          marginTop: 'var(--sp-6)',
-          paddingTop: 'var(--sp-5)',
-          borderTop: '1px solid var(--char)',
-        }}
-      >
-        <h3
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 'var(--fs-h2)',
-            marginBottom: 'var(--sp-3)',
-          }}
-        >
-          Zona peligrosa
-        </h3>
-        <p className="dim" style={{ marginBottom: 'var(--sp-4)', fontSize: 'var(--fs-small)' }}>
-          Eliminá todas las canciones, fases, notas, adjuntos y sesiones de este dispositivo.
-        </p>
-        <button
-          className="danger"
-          onClick={() => setConfirmDelete(true)}
-          disabled={songs.length === 0}
-        >
-          Borrar todo
-        </button>
-      </section>
+      <AdminPinSection />
 
       <FloatingHomeButton />
-
-      <Modal isOpen={confirmDelete} onClose={() => setConfirmDelete(false)} title="¿Borrar todo?">
-        <p
-          className="serif"
-          style={{ fontSize: '1.125rem', marginBottom: 'var(--sp-5)', color: 'var(--bone)' }}
-        >
-          Se eliminarán todas las canciones, fases, notas, adjuntos y sesiones.
-          <br />
-          <strong style={{ color: 'var(--blood-bright)' }}>Esta acción no se puede deshacer.</strong>
-        </p>
-        <div style={{ display: 'flex', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
-          <button
-            className="danger"
-            onClick={() => {
-              deleteAllData();
-              setConfirmDelete(false);
-            }}
-          >
-            Sí, borrar todo
-          </button>
-          <button className="ghost" onClick={() => setConfirmDelete(false)}>
-            Cancelar
-          </button>
-        </div>
-      </Modal>
     </div>
   );
 }
