@@ -157,3 +157,26 @@ Cuando el usuario pida algo nuevo:
 5. Si la decisión contradice algo de `AGENTS.md`, actualizar también `AGENTS.md`.
 
 **No borrar entradas históricas** — son contexto valioso aunque la decisión haya cambiado después.
+
+---
+
+## 2026-07-05 — Login por PIN al ingresar
+
+### Prompt 10 — Acceso inicial con PIN y sesión temporal
+El usuario pidió que al entrar al sitio se muestre login con PIN de 4 dígitos (`4924`), y que habilite sesión por máximo 10 horas solo para el navegador actual.
+
+**Decisión / qué se hizo:**
+- Se creó `PinAccessGate` para bloquear toda la app hasta validar PIN.
+- El PIN correcto es fijo (`4924`) y el input acepta solo 4 dígitos.
+- Al validar, se guarda una sesión local en `localStorage` con `expiresAt` a 10 horas.
+- En cada carga se valida expiración; si venció, se elimina la sesión y vuelve a pedir PIN.
+- El gate se conectó en `App.tsx` antes del router y antes de inicializar la DB.
+
+**Archivos afectados:**
+- `src/components/PinAccessGate.tsx` (nuevo)
+- `src/App.tsx`
+- `docs/prompts-history.md`
+
+**Notas / razones:**
+- Se usó `localStorage` para que sobreviva refresh/cierre y quede acotado al navegador/perfil local.
+- No se agregó backend ni autenticación remota; es control de acceso local para este contexto de app local-first.

@@ -4,18 +4,26 @@ import { Home } from './routes/Home';
 import { Song } from './routes/Song';
 import { Settings } from './routes/Settings';
 import { ThemeToggle } from './components/ThemeToggle';
+import { PinAccessGate, hasValidPinSession } from './components/PinAccessGate';
 import { initDb } from './db/database';
 
 export function App() {
+  const [isUnlocked, setIsUnlocked] = useState(hasValidPinSession);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!isUnlocked) return;
+
     initDb().then(
       () => setReady(true),
       (e) => setError(e instanceof Error ? e.message : String(e)),
     );
-  }, []);
+  }, [isUnlocked]);
+
+  if (!isUnlocked) {
+    return <PinAccessGate onUnlock={() => setIsUnlocked(true)} />;
+  }
 
   if (error) {
     return (

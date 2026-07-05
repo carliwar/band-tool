@@ -1,0 +1,40 @@
+.page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding-top: var(--sp-6);
+}
+
+.card {
+  width: 100%;
+  max-width: 420px;
+  border: 2px solid var(--char);
+  background: var(--ash);
+  padding: var(--sp-5);
+}
+
+.kicker {
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.title {
+  margin-top: var(--sp-2);
+  margin-bottom: var(--sp-4);
+}
+
+.error {
+  margin-top: var(--sp-2);
+  color: var(--blood-bright);
+}
+
+.submit {
+  margin-top: var(--sp-4);
+  width: 100%;
+}
+
+.note {
+  margin-top: var(--sp-4);
+  font-size: var(--fs-small);
+}
